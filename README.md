@@ -45,7 +45,7 @@ You get:     https://example.com/path
 Takes _maybe_ two minutes. Here's what to do:
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser.
-2. Click `copy-unobfuscated-urls.user.js`.
+2. Click [`copy-unobfuscated-urls.user.js`](https://raw.githubusercontent.com/bryanvillarin/copy-unobfuscated-urls/main/copy-unobfuscated-urls.user.js).
 3. When tampermonkey prompts you to install. Click **Install**.
 4. In Zendesk, search for tickets that have obfuscated URLs, or view a single ticket that has obfuscated URL.
 
