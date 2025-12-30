@@ -154,7 +154,8 @@ const CONFIG = {
 
 ## Version History
 
-- **v1.0.0** — Publicly released on GitHub! ✨️
+- **v1.0.1** — Security fix: validate URL protocols before copying *(blocks `javascript:`, `data:`, and other dangerous protocols)*
+- **v1.0.0** — Publicly released on GitHub! ✨️
 - **v0.3.7** — Fixed multi-dot domain matching *(e.g., `example[.]wordpress[.]com` now captured fully)*
 - **v0.3.6** — Fixed split URL matching *(bracketed protocols now captured as single match)*
 - **v0.3.5** — Added 8-second fallback scan for slow-loading large search results

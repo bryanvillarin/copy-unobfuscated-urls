@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      1.0.0
+// @version      1.0.1
 // @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -42,6 +42,21 @@
 
     // Track processed nodes to avoid duplicate processing
     const processedNodes = new WeakSet();
+
+    /**
+     * Validate that a URL uses a safe protocol
+     * @param {string} url - The URL to validate
+     * @returns {boolean} - True if URL uses http or https protocol
+     */
+    function isSafeURL(url) {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            // If URL parsing fails, it's malformed - not safe
+            return false;
+        }
+    }
 
     /**
      * Clean/unobfuscate a URL string
@@ -123,6 +138,12 @@
      * Copy text to clipboard and show feedback
      */
     async function copyToClipboard(text, iconElement) {
+        // Security check: Only copy safe URLs
+        if (!isSafeURL(text)) {
+            console.error('[Copy Unobfuscated URLs] Blocked unsafe URL:', text);
+            return;
+        }
+
         try {
             await navigator.clipboard.writeText(text);
             showCopyFeedback(iconElement);
@@ -137,6 +158,12 @@
      * Fallback copy method for browsers without clipboard API
      */
     function fallbackCopy(text, iconElement) {
+        // Security check: Only copy safe URLs
+        if (!isSafeURL(text)) {
+            console.error('[Copy Unobfuscated URLs] Blocked unsafe URL:', text);
+            return;
+        }
+
         const textarea = document.createElement('textarea');
         textarea.value = text;
         textarea.style.position = 'fixed';
@@ -209,18 +236,8 @@
             const text = node.nodeValue;
             const matches = [...text.matchAll(OBFUSCATED_URL_PATTERN)];
 
+            // If no matches, skip processing
             if (matches.length === 0) {
-                return;
-            }
-
-            // Check if we've already added icons to this text node's siblings
-            // Look for our clipboard emoji in adjacent nodes
-            if (node.previousSibling && 
-                node.previousSibling.nodeType === Node.ELEMENT_NODE &&
-                node.previousSibling.getAttribute &&
-                node.previousSibling.getAttribute('aria-label') === 'Copy unobfuscated URL') {
-                console.log('[Copy Unobfuscated URLs] Icons already exist for this text, skipping');
-                processedNodes.add(node);
                 return;
             }
 
