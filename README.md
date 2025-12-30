@@ -154,6 +154,7 @@ const CONFIG = {
 
 ## Version History
 
+- **v1.0.4** — Fixed clipboard icons not appearing in search results *(narrowed search exclusion to only skip input fields, not results tables)*
 - **v1.0.3** — Fixed duplicate clipboard icons in search results *(mark newly created text nodes as processed; exclude search inputs and navigation)*
 - **v1.0.2** — Attempted fix for duplicates *(reverted—container-level tracking was too broad)*
 - **v1.0.1** — Security fix: validate URL protocols before copying *(blocks `javascript:`, `data:`, and other dangerous protocols)*

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      1.0.3
+// @version      1.0.4
 // @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -217,12 +217,16 @@
                     return;
                 }
                 
-                // Skip search inputs and header navigation
+                // Skip search inputs and header navigation (but NOT search results)
                 if (parent.tagName === 'HEADER' || 
-                    parent.tagName === 'NAV' ||
-                    parent.classList?.contains('search') ||
-                    parent.getAttribute('role') === 'search' ||
-                    parent.getAttribute('data-garden-id')?.includes('search')) {
+                    parent.tagName === 'NAV') {
+                    return;
+                }
+                
+                // Only skip if it's actually a search input field or control
+                if (parent.getAttribute('role') === 'search' ||
+                    parent.getAttribute('type') === 'search' ||
+                    (parent.tagName === 'FORM' && parent.querySelector('input[type="search"]'))) {
                     return;
                 }
                 
