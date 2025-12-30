@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      1.0.2
+// @version      1.0.3
 // @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -42,7 +42,6 @@
 
     // Track processed nodes to avoid duplicate processing
     const processedNodes = new WeakSet();
-    const PROCESSED_ATTR = 'data-copy-urls-processed';
 
     /**
      * Validate that a URL uses a safe protocol
@@ -218,6 +217,15 @@
                     return;
                 }
                 
+                // Skip search inputs and header navigation
+                if (parent.tagName === 'HEADER' || 
+                    parent.tagName === 'NAV' ||
+                    parent.classList?.contains('search') ||
+                    parent.getAttribute('role') === 'search' ||
+                    parent.getAttribute('data-garden-id')?.includes('search')) {
+                    return;
+                }
+                
                 // Skip specific problematic areas in tables
                 if (parent.tagName === 'TD' || parent.tagName === 'TH') {
                     // Skip if this cell is ONLY a checkbox (status/selection column)
@@ -269,9 +277,9 @@
 
                 // Add text before the match
                 if (matchIndex > lastIndex) {
-                    fragment.appendChild(
-                        document.createTextNode(text.substring(lastIndex, matchIndex))
-                    );
+                    const beforeText = document.createTextNode(text.substring(lastIndex, matchIndex));
+                    processedNodes.add(beforeText); // Mark as processed
+                    fragment.appendChild(beforeText);
                 }
 
                 // Add clipboard icon
@@ -280,14 +288,18 @@
                 iconsAdded++;
 
                 // Add the obfuscated URL text
-                fragment.appendChild(document.createTextNode(obfuscatedURL));
+                const urlText = document.createTextNode(obfuscatedURL);
+                processedNodes.add(urlText); // Mark as processed
+                fragment.appendChild(urlText);
 
                 lastIndex = matchIndex + obfuscatedURL.length;
             });
 
             // Add remaining text
             if (lastIndex < text.length) {
-                fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+                const remainingText = document.createTextNode(text.substring(lastIndex));
+                processedNodes.add(remainingText); // Mark as processed
+                fragment.appendChild(remainingText);
             }
 
             // Only replace if we actually added icons
@@ -305,11 +317,6 @@
      */
     function processNode(node) {
         try {
-            // Skip already processed containers
-            if (node.nodeType === Node.ELEMENT_NODE && node.hasAttribute && node.hasAttribute(PROCESSED_ATTR)) {
-                return;
-            }
-
             if (node.nodeType === Node.TEXT_NODE) {
                 processTextNode(node);
             } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -317,9 +324,6 @@
                 if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(node.tagName)) {
                     return;
                 }
-
-                // Mark container as processed BEFORE processing its contents
-                node.setAttribute(PROCESSED_ATTR, 'true');
 
                 // Process child nodes
                 const walker = document.createTreeWalker(
