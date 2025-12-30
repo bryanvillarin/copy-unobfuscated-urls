@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      1.0.1
+// @version      1.0.2
 // @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -42,6 +42,7 @@
 
     // Track processed nodes to avoid duplicate processing
     const processedNodes = new WeakSet();
+    const PROCESSED_ATTR = 'data-copy-urls-processed';
 
     /**
      * Validate that a URL uses a safe protocol
@@ -304,6 +305,11 @@
      */
     function processNode(node) {
         try {
+            // Skip already processed containers
+            if (node.nodeType === Node.ELEMENT_NODE && node.hasAttribute && node.hasAttribute(PROCESSED_ATTR)) {
+                return;
+            }
+
             if (node.nodeType === Node.TEXT_NODE) {
                 processTextNode(node);
             } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -311,6 +317,9 @@
                 if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(node.tagName)) {
                     return;
                 }
+
+                // Mark container as processed BEFORE processing its contents
+                node.setAttribute(PROCESSED_ATTR, 'true');
 
                 // Process child nodes
                 const walker = document.createTreeWalker(
