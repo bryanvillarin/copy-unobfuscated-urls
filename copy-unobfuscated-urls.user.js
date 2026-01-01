@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      1.0.4
-// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL.
+// @version      2.0.0
+// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Debug mode: add ?debug=copy-urls to URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
 // @supportURL   https://bryanvillarin.link/contact/
@@ -13,7 +13,6 @@
 // @match        *://*.zdusercontent.com/*
 // @match        *://*.zopim.com/*
 // @match        *://*.zopim.io/*
-// @icon         📋
 // @updateURL    https://raw.githubusercontent.com/bryanvillarin/copy-unobfuscated-urls/main/copy-unobfuscated-urls.user.js
 // @downloadURL  https://raw.githubusercontent.com/bryanvillarin/copy-unobfuscated-urls/main/copy-unobfuscated-urls.user.js
 // @grant        none
@@ -23,6 +22,14 @@
 
 (function() {
     'use strict';
+
+    // Debug mode - enable via URL parameter: ?debug=copy-urls
+    const DEBUG = window.location.search.includes('debug=copy-urls');
+    
+    // Debug logging helper
+    function log(...args) {
+        if (DEBUG) console.log('[Copy Unobfuscated URLs]', ...args);
+    }
 
     // Configuration
     const CONFIG = {
@@ -44,18 +51,24 @@
     const processedNodes = new WeakSet();
 
     /**
-     * Validate that a URL uses a safe protocol
+     * Validate that a URL uses a safe protocol or is a protocol-less domain
      * @param {string} url - The URL to validate
-     * @returns {boolean} - True if URL uses http or https protocol
+     * @returns {boolean} - True if URL uses http/https or is a domain without protocol
      */
     function isSafeURL(url) {
-        try {
-            const parsed = new URL(url);
-            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-        } catch {
-            // If URL parsing fails, it's malformed - not safe
-            return false;
+        // If it has a protocol, validate it's http/https
+        if (/^[a-z][a-z0-9+.-]*:/i.test(url)) {
+            try {
+                const parsed = new URL(url);
+                return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+            } catch {
+                return false;
+            }
         }
+        
+        // Protocol-less: accept if it looks like a domain (example.com)
+        // Block obvious attack patterns (spaces, quotes, brackets, etc.)
+        return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(url);
     }
 
     /**
@@ -89,19 +102,36 @@
 
     /**
      * Create clipboard icon element
+     * @param {string} url - The URL to copy when clicked
+     * @param {Object} customStyles - Optional custom styles to override defaults
      */
-    function createClipboardIcon(url) {
+    function createClipboardIcon(url, customStyles = {}) {
         const icon = document.createElement('span');
         icon.textContent = '📋';
-        icon.style.cssText = `
-            cursor: pointer;
-            opacity: ${CONFIG.iconOpacity};
-            transition: opacity 0.2s ease;
-            margin-right: 4px;
-            display: inline-block;
-            user-select: none;
-            font-size: 14px;
-        `;
+        
+        // Base styles
+        const baseStyles = {
+            cursor: 'pointer',
+            opacity: CONFIG.iconOpacity,
+            transition: 'opacity 0.2s ease',
+            marginRight: '6px',
+            display: 'inline',
+            userSelect: 'none',
+            fontSize: '14px',
+            verticalAlign: 'baseline',
+        };
+        
+        // Merge custom styles
+        const styles = { ...baseStyles, ...customStyles };
+        
+        // Convert to CSS string (handle camelCase to kebab-case)
+        icon.style.cssText = Object.entries(styles)
+            .map(([key, value]) => {
+                const kebabKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                return `${kebabKey}: ${value}`;
+            })
+            .join('; ');
+        
         icon.setAttribute('aria-label', 'Copy unobfuscated URL');
         icon.setAttribute('role', 'button');
         icon.setAttribute('tabindex', '0');
@@ -196,6 +226,55 @@
     }
 
     /**
+     * Process ticket subject line (single ticket view only)
+     */
+    function processTicketSubject() {
+        try {
+            log('Looking for ticket subject...');
+            
+            // Selector for ticket subject input in single ticket view
+            const subjectInput = document.querySelector('[data-test-id="omni-header-subject"]');
+            
+            log('Subject input:', subjectInput ? 'FOUND' : 'not found');
+            
+            if (subjectInput && !subjectInput.hasAttribute('data-clipboard-added')) {
+                const subjectText = subjectInput.value || subjectInput.textContent;
+                log('Subject text:', subjectText);
+                
+                const matches = [...subjectText.matchAll(OBFUSCATED_URL_PATTERN)];
+                log('Found', matches.length, 'obfuscated URLs in subject');
+                
+                if (matches.length > 0) {
+                    log('Found obfuscated URL in subject:', matches[0][0]);
+                    
+                    const cleanURL = unobfuscateURL(matches[0][0]);
+                    
+                    // Create icon with custom positioning styles for subject line
+                    const icon = createClipboardIcon(cleanURL, {
+                        position: 'relative',
+                        zIndex: '10'
+                    });
+                    
+                    // Find the field container (parent of the input's parent span)
+                    const inputWrapper = subjectInput.parentElement;
+                    const fieldContainer = inputWrapper ? inputWrapper.parentElement : null;
+                    
+                    if (fieldContainer) {
+                        // Insert at the beginning of the field container
+                        fieldContainer.insertBefore(icon, fieldContainer.firstChild);
+                        subjectInput.setAttribute('data-clipboard-added', 'true');
+                        log('✅ Added clipboard to subject field container');
+                    }
+                }
+            } else {
+                log('No subject input found or already processed');
+            }
+        } catch (err) {
+            console.error('[Copy Unobfuscated URLs] Error processing subject:', err);
+        }
+    }
+
+    /**
      * Process a text node and add clipboard icons
      */
     function processTextNode(node) {
@@ -209,36 +288,71 @@
                 return;
             }
 
+            log('Examining text node:', node.nodeValue.substring(0, 100));
+
             // Skip processing inside critical elements
             const SKIP_TAGS = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'TEXTAREA', 'INPUT', 'SELECT', 'CODE', 'PRE', 'BLOCKQUOTE'];
             let parent = node.parentElement;
+            let isSubjectCell = false;
+            
             while (parent) {
                 if (SKIP_TAGS.includes(parent.tagName)) {
+                    log('Skipped - inside', parent.tagName);
                     return;
                 }
                 
-                // Skip search inputs and header navigation (but NOT search results)
+                // Skip search inputs and header navigation
                 if (parent.tagName === 'HEADER' || 
                     parent.tagName === 'NAV') {
+                    log('Skipped - inside HEADER/NAV');
                     return;
                 }
                 
-                // Only skip if it's actually a search input field or control
+                // Skip search input fields
                 if (parent.getAttribute('role') === 'search' ||
                     parent.getAttribute('type') === 'search' ||
                     (parent.tagName === 'FORM' && parent.querySelector('input[type="search"]'))) {
+                    log('Skipped - inside search form');
                     return;
                 }
                 
-                // Skip specific problematic areas in tables
-                if (parent.tagName === 'TD' || parent.tagName === 'TH') {
-                    // Skip if this cell is ONLY a checkbox (status/selection column)
-                    // Don't skip if it has substantial content (like subject with checkbox)
-                    const hasCheckbox = parent.querySelector('input[type="checkbox"]');
-                    const cellText = parent.textContent.trim();
+                // Check if we're in a ticket list table
+                const inTicketListTable = parent.getAttribute('data-test-id') === 'generic-table' ||
+                    (parent.classList.contains('table') && parent.closest('[data-test-id="views-table"]'));
+                
+                if (inTicketListTable) {
+                    log('Inside ticket list table');
                     
-                    // If cell has checkbox AND very little text, it's a selection column
-                    if (hasCheckbox && cellText.length < 20) {
+                    // Find the closest TD/TH ancestor
+                    let cell = node.parentElement;
+                    while (cell && cell.tagName !== 'TD' && cell.tagName !== 'TH') {
+                        cell = cell.parentElement;
+                        // Stop if we've climbed out of the table
+                        if (!cell || cell.getAttribute('data-test-id') === 'generic-table') {
+                            break;
+                        }
+                    }
+                    
+                    if (cell && (cell.tagName === 'TD' || cell.tagName === 'TH')) {
+                        // We found a table cell - check if it's a Subject cell
+                        const hasLink = cell.querySelector('a');
+                        const hasSubstantialText = cell.textContent.trim().length > 20;
+                        
+                        log('Table cell check - hasLink:', !!hasLink, 'hasSubstantialText:', hasSubstantialText, 'text length:', cell.textContent.trim().length);
+                        
+                        if (hasLink && hasSubstantialText) {
+                            // This looks like a Subject cell - mark it for special handling
+                            isSubjectCell = true;
+                            log('Marked as Subject cell');
+                            break;
+                        } else {
+                            // Not a Subject cell - skip processing
+                            log('Skipped - not a Subject cell');
+                            return;
+                        }
+                    } else {
+                        // We're in the table but couldn't find a cell - skip
+                        log('Skipped - in table but not in cell');
                         return;
                     }
                 }
@@ -249,6 +363,8 @@
             const text = node.nodeValue;
             const matches = [...text.matchAll(OBFUSCATED_URL_PATTERN)];
 
+            log('Found', matches.length, 'obfuscated URLs');
+
             // If no matches, skip processing
             if (matches.length === 0) {
                 return;
@@ -256,7 +372,53 @@
 
             // Mark this node as processed
             processedNodes.add(node);
+            
+            // Special handling for Subject cells in ticket list tables
+            if (isSubjectCell) {
+                log('Processing Subject cell');
+                // Find the parent TD/TH cell
+                let cell = node.parentElement;
+                while (cell && cell.tagName !== 'TD' && cell.tagName !== 'TH') {
+                    cell = cell.parentElement;
+                }
+                
+                log('Found cell:', cell ? cell.tagName : 'none');
+                
+                if (cell && !cell.hasAttribute('data-clipboard-added')) {
+                    // Get the first obfuscated URL in this cell
+                    const firstMatch = matches[0];
+                    const cleanURL = unobfuscateURL(firstMatch[0]);
+                    
+                    log('Adding clipboard icon for:', cleanURL);
+                    
+                    // Create clipboard icon
+                    const icon = createClipboardIcon(cleanURL);
+                    
+                    // Find the link or text container inside the cell (skip over wrapper divs)
+                    let targetElement = cell.querySelector('a') || cell;
+                    
+                    // If we found a link, insert at the beginning of the link
+                    if (targetElement.tagName === 'A') {
+                        targetElement.insertBefore(icon, targetElement.firstChild);
+                    } else {
+                        // No link found, insert at cell level with wrapper
+                        const wrapper = document.createElement('span');
+                        wrapper.style.cssText = 'display: inline; white-space: nowrap;';
+                        wrapper.appendChild(icon);
+                        cell.insertBefore(wrapper, cell.firstChild);
+                    }
+                    
+                    // Mark cell as processed to avoid duplicate icons
+                    cell.setAttribute('data-clipboard-added', 'true');
+                    
+                    log('✅ Added clipboard to Subject cell');
+                }
+                return; // Don't modify the actual text content in Subject cells
+            }
 
+            log('Processing as regular content (not Subject cell)');
+
+            // Normal processing for ticket content (not Subject cells)
             // Create a document fragment to hold the new content
             const fragment = document.createDocumentFragment();
             let lastIndex = 0;
@@ -270,11 +432,11 @@
                 const charBeforeMatch = text.charAt(match.index - 1);
                 
                 if (charBeforeMatch === '@') {
-                    console.log('[Copy Unobfuscated URLs] Skipping email domain:', obfuscatedURL);
+                    log('Skipping email domain:', obfuscatedURL);
                     return; // This is part of an email address
                 }
                 
-                console.log('[Copy Unobfuscated URLs] Processing URL:', obfuscatedURL);
+                log('Processing URL:', obfuscatedURL);
                 
                 const cleanURL = unobfuscateURL(obfuscatedURL);
                 const matchIndex = match.index;
@@ -309,7 +471,7 @@
             // Only replace if we actually added icons
             if (iconsAdded > 0 && node.parentNode) {
                 node.parentNode.replaceChild(fragment, node);
-                console.log(`[Copy Unobfuscated URLs] Added ${iconsAdded} icon(s)`);
+                log(`Added ${iconsAdded} icon(s)`);
             }
         } catch (err) {
             console.error('[Copy Unobfuscated URLs] Error in processTextNode:', err);
@@ -355,7 +517,7 @@
      */
     function init() {
         try {
-            console.log('[Copy Unobfuscated URLs] Starting initialization...');
+            log('Starting initialization...');
             
             // Verify document.body exists
             if (!document.body) {
@@ -407,13 +569,13 @@
                 subtree: true,
             });
 
-            console.log('[Copy Unobfuscated URLs] ✅ Observer started, scanning existing content...');
+            log('✅ Observer started, scanning existing content...');
 
             // SAFELY process existing content after observer is set up
             // Target only likely content areas to avoid breaking Zendesk's core UI
             setTimeout(() => {
                 try {
-                    console.log('[Copy Unobfuscated URLs] Processing existing ticket content...');
+                    log('Processing existing ticket content...');
                     
                     // Look for common Zendesk content containers
                     const contentSelectors = [
@@ -422,31 +584,39 @@
                         '.ticket-thread',                         // Thread container
                         '.comment',                               // Individual comments
                         '[role="article"]',                       // Article content
+                        '[data-test-id="generic-table"]',         // Ticket list tables (search/views)
                     ];
 
                     let nodesProcessed = 0;
                     contentSelectors.forEach(selector => {
                         const containers = document.querySelectorAll(selector);
+                        log(`Found ${containers.length} elements for selector: ${selector}`);
                         containers.forEach(container => {
                             processNode(container);
                             nodesProcessed++;
                         });
                     });
 
-                    console.log(`[Copy Unobfuscated URLs] Processed ${nodesProcessed} content containers`);
+                    log(`Processed ${nodesProcessed} content containers`);
+                    
+                    // Also process ticket subject line (single ticket view)
+                    processTicketSubject();
                 } catch (err) {
                     console.error('[Copy Unobfuscated URLs] Error processing existing content:', err);
                 }
             }, 1000); // Additional 1 second after observer starts
 
-            // Fallback scan for slow-loading search results (large tables)
+            // Fallback scan for slow-loading ticket list tables (large search results/views)
             setTimeout(() => {
                 try {
-                    const searchResults = document.querySelector('[data-test-id="generic-table"]');
-                    if (searchResults) {
-                        console.log('[Copy Unobfuscated URLs] Running fallback scan for search results...');
-                        processNode(searchResults);
+                    const ticketListTable = document.querySelector('[data-test-id="generic-table"]');
+                    if (ticketListTable) {
+                        log('Running 8-second fallback scan for ticket list table...');
+                        processNode(ticketListTable);
                     }
+                    
+                    // Also check ticket subject again in case it loaded late
+                    processTicketSubject();
                 } catch (err) {
                     console.error('[Copy Unobfuscated URLs] Error in fallback scan:', err);
                 }
@@ -458,13 +628,13 @@
     }
 
     // Start the script with a longer delay to let Zendesk fully stabilize
-    console.log('[Copy Unobfuscated URLs] Script loaded, waiting for page to stabilize...');
+    log('Script loaded, waiting for page to stabilize...');
     
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(init, 3000); // 3 seconds for Zendesk to finish initial render
+            setTimeout(init, 4000); // 4 seconds for Zendesk to finish initial render
         });
     } else {
-        setTimeout(init, 3000); // 3 seconds
+        setTimeout(init, 4000); // 4 seconds
     }
 })();

@@ -21,7 +21,7 @@ Using [Claude](https://claude.ai), I built a [Tampermonkey](https://www.tampermo
 - [Ideas for Later](#ideas-for-later)
 - [Contributing](#contributing)
 - [License](#license)
-️
+
 ## What It Does
 
 The script scans Zendesk pages, and:
@@ -46,8 +46,8 @@ Takes _maybe_ two minutes. Here's what to do:
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser.
 2. Click [`copy-unobfuscated-urls.user.js`](https://raw.githubusercontent.com/bryanvillarin/copy-unobfuscated-urls/main/copy-unobfuscated-urls.user.js).
-3. When Tampermonkey prompts you to install. Click **Install**.
-4. In Zendesk, search for tickets that have obfuscated URLs, or view a single ticket that has obfuscated URL.
+3. When Tampermonkey prompts you to install, click **Install**.
+4. In Zendesk, search for tickets that have obfuscated URLs, or view a single ticket that has an obfuscated URL.
 
 The script runs automatically. No config needed.
 
@@ -96,8 +96,8 @@ The script knows when to stay out of the way:
 
 How the timing works:
 
-1. **3 seconds:** Waits for Zendesk to stabilize.
-2. **4 seconds:** Scans ticket content areas.
+1. **4 seconds:** Waits for Zendesk to stabilize.
+2. **5 seconds:** Scans ticket content areas and subject lines.
 3. **8 seconds:** Fallback scan for large search results. *(e.g. 5,000+ tickets load slowly.)*
 4. **Ongoing:** `MutationObserver` watches for new content, like comments, or tickets that load dynamically.
 
@@ -116,7 +116,17 @@ Runs on all Zendesk infrastructure:
 
 ## Configuration
 
-If you want to tweak things, edit these constants:
+**Debug mode:**
+
+Add `?debug=copy-urls` to the URL to enable console logging. Normal operation is silent except for errors.
+
+```
+https://yourcompany.zendesk.com/agent/tickets/12345?debug=copy-urls
+```
+
+**Customization:**
+
+If you want to tweak appearance, edit these constants in the script:
 
 ```javascript
 const CONFIG = {
@@ -130,7 +140,7 @@ const CONFIG = {
 
 **Icons not appearing?**
 
-- Check browser console for errors *(filter by `[Copy Unobfuscated URLs]`)*
+- Enable debug mode (`?debug=copy-urls`) and check browser console
 - Verify Tampermonkey is enabled for the domain
 - Make sure the URL is actually obfuscated—normal URLs won't show icons
 - Wait 8 seconds on large search results
@@ -154,9 +164,10 @@ const CONFIG = {
 
 ## Version History
 
-- **v1.0.4** — Fixed clipboard icons not appearing in search results *(narrowed search exclusion to only skip input fields, not results tables)*
-- **v1.0.3** — Fixed duplicate clipboard icons in search results *(mark newly created text nodes as processed; exclude search inputs and navigation)*
-- **v1.0.2** — Attempted fix for duplicates *(reverted—container-level tracking was too broad)*
+- **v2.0.0** — Single ticket subject line support, debug mode toggle (`?debug=copy-urls`), silent production logging *(500K+ console statements eliminated)*, consolidated icon styling, performance improvements
+- **v1.0.4** — Fixed search results: narrowed search exclusions to only skip actual search input fields
+- **v1.0.3** — Fixed duplicate icons appearing in MutationObserver loop
+- **v1.0.2** — Container-level tracking for duplicate prevention
 - **v1.0.1** — Security fix: validate URL protocols before copying *(blocks `javascript:`, `data:`, and other dangerous protocols)*
 - **v1.0.0** — Publicly released on GitHub! ✨️
 - **v0.3.7** — Fixed multi-dot domain matching *(e.g., `example[.]wordpress[.]com` now captured fully)*
@@ -186,8 +197,8 @@ const CONFIG = {
 ```
 .
 ├── copy-unobfuscated-urls.user.js  # The script
-├── ideas.md                                 # Future enhancements
-└── README.md                                # You're here
+├── ideas.md                        # Future enhancements
+└── README.md                       # You're here
 ```
 
 ## Ideas for Later
@@ -195,7 +206,6 @@ const CONFIG = {
 See [`ideas.md`](ideas.md) for what's _potentially_ on deck:
 
 - Strip tracking parameters from URLs
-- Test tables with obfuscated URLs
 
 ## Contributing
 
