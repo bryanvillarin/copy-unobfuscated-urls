@@ -31,33 +31,4 @@ That's... fine. But not *clean*. All those `utm_*`, `fbclid`, `gclid` params? Su
 
 ---
 
-## [Test] Tables with Obfuscated URLs
-
-Since v0.3.2, the script skips Zendesk UI tables *(ticket list, status columns)* but processes tables inside ticket content *(email bodies, pasted HTML)*.
-
-Need to verify this actually works.
-
-**Test scenario:** Find or create a ticket with an HTML table containing an obfuscated URL:
-
-```html
-<table>
-  <tr>
-    <td>Malicious site:</td>
-    <td>hxxps://evil[.]com</td>
-  </tr>
-</table>
-```
-
-The script should show a clipboard icon inline with `hxxps://evil[.]com` inside that table cell.
-
-**Search query to find existing examples:**
-
-```
-body:"<table" type:ticket
-```
-
-Or just paste the HTML snippet into a test ticket and see what happens.
-
----
-
 *Do you have any other ideas? Please reach out at [bryanvillarin.link/contact](https://bryanvillarin.link/contact/)!*
