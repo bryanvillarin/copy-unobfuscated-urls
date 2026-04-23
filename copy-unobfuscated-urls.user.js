@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      2.1.0
-// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Handles spaces in protocols (e.g. hxxps ://). Debug mode: add ?debug=copy-urls to URL.
+// @version      2.2.0
+// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Handles spaced protocols, protocol-less paths, and span-fragmented URLs. Debug mode: add ?debug=copy-urls to URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
 // @supportURL   https://bryanvillarin.link/contact/
@@ -502,6 +502,48 @@
     }
 
     /**
+     * Fix #3 (v2.2.0): Handle spans where Zendesk splits obfuscated URLs into
+     * mixed text/element children — e.g. "hxxps" + <span>[://]</span> + "domain" +
+     * <span>[.]</span> + "com". Each fragment is invisible to the TreeWalker, but
+     * the parent span's textContent reassembles the full URL.
+     * @param {Element} span - A <span> element to inspect
+     */
+    function processSpanNode(span) {
+        try {
+            // Only act on spans with mixed content (text nodes + child elements)
+            const childNodes = span.childNodes;
+            let hasText = false;
+            let hasElements = false;
+            for (const node of childNodes) {
+                if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) hasText = true;
+                if (node.nodeType === Node.ELEMENT_NODE) hasElements = true;
+            }
+            if (!hasText || !hasElements) return;
+
+            // Already handled?
+            if (span.hasAttribute('data-clipboard-added')) return;
+
+            const text = span.textContent;
+            if (!text || text.length > 50000) return;
+
+            const matches = [...text.matchAll(new RegExp(OBFUSCATED_URL_PATTERN.source, 'gi'))];
+            if (matches.length === 0) return;
+
+            log('processSpanNode matched:', text.substring(0, 100));
+
+            const cleanURL = unobfuscateURL(matches[0][0]);
+            const icon = createClipboardIcon(cleanURL);
+
+            span.parentNode.insertBefore(icon, span);
+            span.setAttribute('data-clipboard-added', 'true');
+
+            log('✅ Added clipboard icon before stitched span');
+        } catch (err) {
+            console.error('[Copy Unobfuscated URLs] Error in processSpanNode:', err);
+        }
+    }
+
+    /**
      * Walk through DOM tree and process text nodes
      */
     function processNode(node) {
@@ -514,6 +556,8 @@
                     return;
                 }
 
+                // Fix #3: spans with stitched obfuscated content are handled
+                // by the querySelectorAll pass below — no need to check here
                 // Process child nodes
                 const walker = document.createTreeWalker(
                     node,
@@ -529,6 +573,11 @@
                 }
 
                 textNodes.forEach(processTextNode);
+
+                // Fix #3: second pass for spans with mixed content (text + child elements)
+                // The TreeWalker above only visits text nodes and misses these entirely
+                const spans = node.querySelectorAll('span');
+                spans.forEach(processSpanNode);
             }
         } catch (err) {
             console.error('[Copy Unobfuscated URLs] Error in processNode:', err);

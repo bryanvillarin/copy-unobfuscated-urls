@@ -166,6 +166,7 @@ const CONFIG = {
 
 ## Version History
 
+- **v2.2.0** — Fixed span-fragmented URLs *(Zendesk splits obfuscated URLs into mixed text/element spans; script now stitches them back together before matching)*
 - **v2.1.0** — Fixed spaced protocol patterns *(e.g. `hxxps :// example [.] com /`)* and protocol-less domains with paths *(e.g. `example[.]org/category/path`)*
 - **v2.0.0** — Single ticket subject line support, debug mode toggle (`?debug=copy-urls`), silent production logging *(500K+ console statements eliminated)*, consolidated icon styling, performance improvements
 - **v1.0.4** — Fixed search results: narrowed search exclusions to only skip actual search input fields
