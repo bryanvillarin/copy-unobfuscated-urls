@@ -60,12 +60,14 @@ The script runs automatically. No config needed.
 - `h..ps://` → `https://`
 - `https[://]` or `http[://]` → proper protocol
 - `hxxp[://]` → `http://`
+- `hxxps :// example [.] com /` → `https://example.com/` *(spaces around `://` and `[.]`)*
 
 **Obfuscated domains:**
 
 - `example[.]com` → `example.com`
 - `example dot com` → `example.com`
 - `example\.com` → `example.com`
+- `example[.]org/path/to/page` → `example.org/path/to/page` *(protocol-less with path)*
 
 **Wrapped URLs:**
 
@@ -164,6 +166,7 @@ const CONFIG = {
 
 ## Version History
 
+- **v2.1.0** — Fixed spaced protocol patterns *(e.g. `hxxps :// example [.] com /`)* and protocol-less domains with paths *(e.g. `example[.]org/category/path`)*
 - **v2.0.0** — Single ticket subject line support, debug mode toggle (`?debug=copy-urls`), silent production logging *(500K+ console statements eliminated)*, consolidated icon styling, performance improvements
 - **v1.0.4** — Fixed search results: narrowed search exclusions to only skip actual search input fields
 - **v1.0.3** — Fixed duplicate icons appearing in MutationObserver loop

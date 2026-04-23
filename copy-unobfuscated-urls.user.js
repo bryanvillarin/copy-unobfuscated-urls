@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      2.0.0
-// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Debug mode: add ?debug=copy-urls to URL.
+// @version      2.1.0
+// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Handles spaces in protocols (e.g. hxxps ://). Debug mode: add ?debug=copy-urls to URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
 // @supportURL   https://bryanvillarin.link/contact/
@@ -45,10 +45,32 @@
     // - Modified dots: [.], dot, \. (not normal dots)
     // IMPORTANT: Greedy matching to capture entire URL as single match
     // IMPORTANT: (?:...)+ allows multiple obfuscated dots (e.g., example[.]wordpress[.]com)
-    const OBFUSCATED_URL_PATTERN = /\b(h[xX.]{2}ps?|https?)\[:\/\/\][^\s<>]+|\b(h[xX.]{2}ps?):\/\/[^\s<>]+|[a-z0-9-]+(?:(\[\.\]| dot |\\.)[a-z0-9-]+)+/gi;
+    // Note: Spaced protocols like "hxxps :// example [.] com" are normalized by
+    // preNormalizeText() before this pattern runs (see Fix #1 below)
+    // Fix #2 (v2.1.0): Branch 3 now captures optional path after protocol-less domain
+    // e.g. "example[.]org/category/path" — previously stopped at the TLD
+    const OBFUSCATED_URL_PATTERN = /\b(h[xX.]{2}ps?|https?)\[:\/\/\][^\s<>]+|\b(h[xX.]{2}ps?):\/\/[^\s<>]+|[a-z0-9-]+(?:(\[\.\]| dot |\\.)[a-z0-9-]+)+(?:[^\s<>]*)?/gi;
 
     // Track processed nodes to avoid duplicate processing
     const processedNodes = new WeakSet();
+
+    /**
+     * Fix #1 (v2.1.0): Pre-normalize text to collapse spaced obfuscation like
+     * "hxxps :// example [.] com / path" into "hxxps://example[.]com/path"
+     * so the main regex can match it normally.
+     * Guard clause makes this a no-op on text without spaced protocols — cheap.
+     * @param {string} text
+     * @returns {string}
+     */
+    function preNormalizeText(text) {
+        if (!/h[xX.]{2}ps? :\/\//i.test(text)) return text;
+
+        return text
+            .replace(/\b(h[xX.]{2}ps?) :\/\/ /gi, '$1://')  // "hxxps :// " -> "hxxps://"
+            .replace(/ \[\.\] /g, '[.]')                      // " [.] "     -> "[.]"
+            .replace(/(\w|\]) \//g, '$1/')                    // "word /"    -> "word/"
+            .replace(/\/ (\w)/g, '/$1');                      // "/ word"    -> "/word"
+    }
 
     /**
      * Validate that a URL uses a safe protocol or is a protocol-less domain
@@ -66,9 +88,10 @@
             }
         }
         
-        // Protocol-less: accept if it looks like a domain (example.com)
-        // Block obvious attack patterns (spaces, quotes, brackets, etc.)
-        return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(url);
+        // Protocol-less: accept domain + optional path, block dangerous patterns
+        // Fix #2 (v2.1.0): extended to allow path segments after the TLD
+        // Blocks spaces, quotes, and other attack vectors; allows / . - _ ~ % = & ? #
+        return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:\/[^\s'"<>]*)?$/i.test(url);
     }
 
     /**
@@ -77,8 +100,8 @@
     function unobfuscateURL(obfuscatedURL) {
         let cleaned = obfuscatedURL
             .replace(/hxxp/gi, 'http')
-            .replace(/\[:\/\/\]/g, '://') // Fix https[://] or http[://]
-            .replace(/\[\.\]/g, '.')       // Fix [.]
+            .replace(/\[:\/\/\]/g, '://')  // Fix https[://] or http[://]
+            .replace(/\[\.\]/g, '.')        // Fix [.]
             .replace(/ dot /gi, '.')
             .replace(/\\\./g, '.')
             .replace(/h\.\.p/gi, 'http')
@@ -360,7 +383,7 @@
                 parent = parent.parentElement;
             }
 
-            const text = node.nodeValue;
+            const text = preNormalizeText(node.nodeValue);
             const matches = [...text.matchAll(OBFUSCATED_URL_PATTERN)];
 
             log('Found', matches.length, 'obfuscated URLs');
