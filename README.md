@@ -98,8 +98,8 @@ The script knows when to stay out of the way:
 
 How the timing works:
 
-1. **4 seconds:** Waits for Zendesk to stabilize.
-2. **5 seconds:** Scans ticket content areas and subject lines.
+1. **4 seconds:** Waits for Zendesk to stabilize, then starts the `MutationObserver`.
+2. **5 seconds:** *(1 second after the observer starts)* Scans ticket content areas and subject lines.
 3. **8 seconds:** Fallback scan for large search results. *(e.g. 5,000+ tickets load slowly.)*
 4. **Ongoing:** `MutationObserver` watches for new content, like comments, or tickets that load dynamically.
 
@@ -166,6 +166,7 @@ const CONFIG = {
 
 ## Version History
 
+- **v2.3.0** — Fixed duplicate clipboard icons *(`processTextNode` and `processSpanNode` used two separate guard mechanisms that didn't talk to each other; `processTextNode` now stamps the ancestor `<span>` with `data-clipboard-added` before DOM replacement, and `processSpanNode` checks that attribute before anything else)*
 - **v2.2.0** — Fixed span-fragmented URLs *(Zendesk splits obfuscated URLs into mixed text/element spans; script now stitches them back together before matching)*
 - **v2.1.0** — Fixed spaced protocol patterns *(e.g. `hxxps :// example [.] com /`)* and protocol-less domains with paths *(e.g. `example[.]org/category/path`)*
 - **v2.0.0** — Single ticket subject line support, debug mode toggle (`?debug=copy-urls`), silent production logging *(500K+ console statements eliminated)*, consolidated icon styling, performance improvements

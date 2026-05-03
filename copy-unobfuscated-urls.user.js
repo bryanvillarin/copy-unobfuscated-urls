@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      2.2.0
+// @version      2.3.0
 // @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Handles spaced protocols, protocol-less paths, and span-fragmented URLs. Debug mode: add ?debug=copy-urls to URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
@@ -493,6 +493,16 @@
 
             // Only replace if we actually added icons
             if (iconsAdded > 0 && node.parentNode) {
+                // Fix #4 (v2.3.0): Mark the closest ancestor span as processed BEFORE
+                // replacing the node. This prevents processSpanNode from running its own
+                // querySelectorAll pass on the same span and adding a duplicate icon.
+                // processedNodes (WeakSet on text nodes) and data-clipboard-added (DOM attr
+                // on element nodes) are two separate guard mechanisms — this bridges them.
+                const ancestorSpan = node.parentElement?.closest('span');
+                if (ancestorSpan) {
+                    ancestorSpan.setAttribute('data-clipboard-added', 'true');
+                }
+
                 node.parentNode.replaceChild(fragment, node);
                 log(`Added ${iconsAdded} icon(s)`);
             }
@@ -510,6 +520,13 @@
      */
     function processSpanNode(span) {
         try {
+            // Fix #4 (v2.3.0): Check FIRST — before the mixed-content gate below.
+            // processTextNode marks this span's data-clipboard-added attribute before
+            // calling replaceChild. If we only checked after the mixed-content test,
+            // a plain-text span (hasText=true, hasElements=false) would still slip
+            // through and get a second icon added by this function.
+            if (span.hasAttribute('data-clipboard-added')) return;
+
             // Only act on spans with mixed content (text nodes + child elements)
             const childNodes = span.childNodes;
             let hasText = false;
@@ -519,9 +536,6 @@
                 if (node.nodeType === Node.ELEMENT_NODE) hasElements = true;
             }
             if (!hasText || !hasElements) return;
-
-            // Already handled?
-            if (span.hasAttribute('data-clipboard-added')) return;
 
             const text = span.textContent;
             if (!text || text.length > 50000) return;
