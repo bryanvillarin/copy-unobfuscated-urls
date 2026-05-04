@@ -30,12 +30,13 @@ The script scans Zendesk pages, and:
 - Adds a clipboard (📋) emoji next to each one.
 - Clicking the clipboard emoji copies the clean, working URL to your clipboard.
 - When applicable, it strips the [`href.li`](https://href.li) prefix to copy the working URL without that prefix.
+- Strips tracking parameters (`utm_*`, `gclid`, `fbclid`, `msclkid`, `ttclid`, and 40+ others) from copied URLs.
 - Skips email addresses, blockquotes, code blocks, and UI chrome.
 
 Here's the transformation:
 
 ```
-You see:     hxxps://href[.]li/hxxps://example[.]com/path
+You see:     hxxps://href[.]li/hxxps://example[.]com/path?utm_source=email&fbclid=abc123
 You click:   📋
 You get:     https://example.com/path
 ```
@@ -72,6 +73,23 @@ The script runs automatically. No config needed.
 **Wrapped URLs:**
 
 - `href.li/https://actual-site.com` → `https://actual-site.com`
+
+**Tracking parameters stripped:**
+
+- **UTM** — `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, and all `utm_*` variants
+- **Google** — `gclid`, `gclsrc`, `dclid`, `gbraid`, `wbraid`, `gad_*`
+- **Meta** — `fbclid`, `fb_action_*`, `fb_ref`, `fb_source`, `igshid`, `ig_rid`
+- **Microsoft** — `msclkid`
+- **Twitter/X** — `twclid`
+- **TikTok** — `ttclid`, `tiktok_r`
+- **LinkedIn** — `li_fat_id`, `mkt_tok`
+- **Yandex** — `yclid`, `_openstat`
+- **Pinterest** — `epik`
+- **Snapchat / Reddit** — `scid`, `rdt_cid`
+- **Email platforms** — `mc_cid`, `mc_eid` *(Mailchimp)*, `_hsenc`, `_hsmi`, `__hsfp`, `__hssc`, `__hstc`, `hsCtaTracking` *(HubSpot)*, `_ke` *(Klaviyo)*, `__s` *(Drip)*, `ml_subscriber` *(MailerLite)*, `ck_subscriber_id` *(ConvertKit)*, `omnisendContactID`, `s_cid`, `ef_id` *(Adobe)*, `vero_id`
+- **Analytics** — `_ga`, `_gid`, `_gl`
+
+Functional parameters (`ref`, `si`, `at`, `feature`) are intentionally left alone — they serve real purposes on platforms like GitHub, YouTube, and GitLab.
 
 ## Visual Feedback
 
@@ -166,6 +184,7 @@ const CONFIG = {
 
 ## Version History
 
+- **v2.4.0** — Strips tracking parameters from copied URLs *(utm_\*, gclid, fbclid, msclkid, ttclid, and 40+ others — pure surveillance cruft, never navigation-critical)*
 - **v2.3.0** — Fixed duplicate clipboard icons *(`processTextNode` and `processSpanNode` used two separate guard mechanisms that didn't talk to each other; `processTextNode` now stamps the ancestor `<span>` with `data-clipboard-added` before DOM replacement, and `processSpanNode` checks that attribute before anything else)*
 - **v2.2.0** — Fixed span-fragmented URLs *(Zendesk splits obfuscated URLs into mixed text/element spans; script now stitches them back together before matching)*
 - **v2.1.0** — Fixed spaced protocol patterns *(e.g. `hxxps :// example [.] com /`)* and protocol-less domains with paths *(e.g. `example[.]org/category/path`)*
@@ -208,9 +227,9 @@ const CONFIG = {
 
 ## Ideas for Later
 
-See [`ideas.md`](ideas.md) for what's _potentially_ on deck:
+See [`ideas.md`](ideas.md) for what's _potentially_ on deck.
 
-- Strip tracking parameters from URLs
+Got an idea? [Reach out](https://bryanvillarin.link/contact/).
 
 ## Contributing
 
@@ -221,7 +240,7 @@ Found a bug? Have an idea?
 
 ## License
 
-MIT License — see the script header for details.
+[MIT License](LICENSE)
 
 ---
 

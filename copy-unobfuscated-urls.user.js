@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Copy Unobfuscated URLs
 // @namespace    https://github.com/bryanvillarin/copy-unobfuscated-urls/
-// @version      2.3.0
-// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Handles spaced protocols, protocol-less paths, and span-fragmented URLs. Debug mode: add ?debug=copy-urls to URL.
+// @version      2.4.0
+// @description  In Zendesk, adds a clipboard emoji next to an obfuscated URL that allows you to copy the actual URL. Handles spaced protocols, protocol-less paths, and span-fragmented URLs. Strips tracking parameters (utm_*, gclid, fbclid, and friends) from copied URLs. Debug mode: add ?debug=copy-urls to URL.
 // @author       Bryan Villarin
 // @homepage     https://bryanvillarin.link
 // @supportURL   https://bryanvillarin.link/contact/
@@ -51,6 +51,11 @@
     // e.g. "example[.]org/category/path" — previously stopped at the TLD
     const OBFUSCATED_URL_PATTERN = /\b(h[xX.]{2}ps?|https?)\[:\/\/\][^\s<>]+|\b(h[xX.]{2}ps?):\/\/[^\s<>]+|[a-z0-9-]+(?:(\[\.\]| dot |\\.)[a-z0-9-]+)+(?:[^\s<>]*)?/gi;
 
+    // Tracking parameters that are safe to strip always — pure surveillance cruft.
+    // These are never used for navigation or page functionality.
+    // Intentionally excluded: ref, si, at, feature — functional on some platforms.
+    const TRACKING_PARAM_PATTERN = /^(utm_|gclid|gclsrc|dclid|gbraid|wbraid|gad_|fbclid|fb_action|fb_ref|fb_source|igshid|ig_rid|msclkid|twclid|ttclid|tiktok_r|li_fat_id|mkt_tok|yclid|_openstat|epik|scid|rdt_cid|mc_cid|mc_eid|_hs|__hs|hsCtaTracking|_ke|__s|ml_subscriber|ck_subscriber_id|omnisendContactID|s_cid|ef_id|vero_id|_ga|_gid|_gl)/i;
+
     // Track processed nodes to avoid duplicate processing
     const processedNodes = new WeakSet();
 
@@ -95,6 +100,43 @@
     }
 
     /**
+     * Strip known tracking parameters from a URL.
+     * Handles both full URLs (https://...) and protocol-less domains (example.com/path?...).
+     * Uses URLSearchParams for correctness — handles encoding, repeated keys, edge cases.
+     * Falls back to returning the original URL if parsing fails; never breaks a copy.
+     * @param {string} url - The URL to clean
+     * @returns {string} - URL with tracking params removed
+     */
+    function stripTrackingParams(url) {
+        try {
+            const isProtocolLess = !/^https?:\/\//i.test(url);
+            const workingURL = isProtocolLess ? 'https://' + url : url;
+            const parsed = new URL(workingURL);
+
+            // Nothing to strip if no query string
+            if (!parsed.search) return url;
+
+            const before = parsed.search;
+            for (const key of [...parsed.searchParams.keys()]) {
+                if (TRACKING_PARAM_PATTERN.test(key)) {
+                    parsed.searchParams.delete(key);
+                }
+            }
+
+            const result = parsed.toString();
+            const stripped = isProtocolLess ? result.replace(/^https:\/\//, '') : result;
+
+            if (stripped !== url) {
+                log('Stripped tracking params:', before, '→', parsed.search || '(none)');
+            }
+
+            return stripped;
+        } catch {
+            return url; // Malformed URL — return as-is, never break
+        }
+    }
+
+    /**
      * Clean/unobfuscate a URL string
      */
     function unobfuscateURL(obfuscatedURL) {
@@ -120,7 +162,7 @@
             // If destination isn't http(s), keep the full href.li URL
         }
         
-        return cleaned;
+        return stripTrackingParams(cleaned);
     }
 
     /**
